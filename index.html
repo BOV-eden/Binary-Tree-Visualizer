@@ -2,13 +2,13 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>二叉树可视化矩阵 - Mobile Ready</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>二叉树可视化 - MobileAdapted</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-color: #050a14;
-            --panel-bg: rgba(10, 17, 40, 0.85);
+            --panel-bg: rgba(10, 17, 40, 0.9);
             --accent-cyan: #00f7ff;
             --accent-blue: #0066ff;
             --highlight-gold: #ffd700; 
@@ -22,42 +22,51 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             font-family: 'Orbitron', 'Noto Sans SC', sans-serif;
-            height: 100vh;
+            
+            /* --- 核心修复：解决移动端高度溢出问题 --- */
+            position: fixed; /* 锁死页面，防止回弹 */
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;       /* 兼容旧浏览器 */
+            height: 100dvh;     /* 关键：动态视口高度，减去地址栏高度 */
+            
             display: flex;
             flex-direction: column;
-            overflow: hidden; /* 禁止溢出滚动 */
+            overflow: hidden;
             
-            /* 关键修改2：禁止浏览器的默认触摸操作（如双击缩放、滚动） */
             touch-action: none; 
-            -webkit-user-select: none; /* 禁止选中文本 */
+            -webkit-user-select: none;
             user-select: none;
             
             background-image: 
                 linear-gradient(30deg, var(--grid-line) 12%, transparent 12.5%, transparent 87%, var(--grid-line) 87.5%, var(--grid-line)),
-                linear-gradient(150deg, var(--grid-line) 12%, transparent 12.5%, transparent 87%, var(--grid-line) 87.5%, var(--grid-line)),
-                radial-gradient(circle at 50% 50%, rgba(0, 102, 255, 0.15), transparent 70%);
-            background-size: 40px 70px, 40px 70px, 100% 100%;
-            background-position: 0 0, 0 0, 0 0;
+                linear-gradient(150deg, var(--grid-line) 12%, transparent 12.5%, transparent 87%, var(--grid-line) 87.5%, var(--grid-line));
+            background-size: 40px 70px;
         }
 
+        /* 顶部栏更紧凑 */
         .title-bar {
-            height: 50px;
+            height: 44px; /* 标准 App 导航栏高度 */
             background: rgba(0,0,0,0.6);
             backdrop-filter: blur(8px);
             display: flex;
             align-items: center;
+            justify-content: space-between;
             padding: 0 15px;
             border-bottom: 1px solid var(--accent-blue);
-            flex-shrink: 0; /* 防止被压缩 */
+            flex-shrink: 0;
+            padding-top: env(safe-area-inset-top); /* 适配刘海 */
         }
-        .title-bar h1 { font-size: 16px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .title-bar h1 { font-size: 14px; color: #fff; margin: 0; }
+        .version-tag { font-size: 10px; color: var(--accent-cyan); border: 1px solid var(--accent-cyan); padding: 0 4px; border-radius: 3px; }
 
         .main-container {
-            flex: 1;
+            flex: 1; /* 自动占据剩余空间 */
             position: relative;
             cursor: grab;
             overflow: hidden;
-            touch-action: none; /* 再次确保画布区域不响应默认手势 */
+            touch-action: none;
+            width: 100%;
         }
         .main-container:active { cursor: grabbing; }
 
@@ -77,8 +86,8 @@
 
         .node {
             position: absolute;
-            width: 44px; /* 稍微调小一点适应手机 */
-            height: 44px;
+            width: 40px; /* 进一步适配小屏 */
+            height: 40px;
             background: radial-gradient(circle at 30% 30%, var(--accent-cyan), var(--accent-blue));
             border-radius: 50%;
             display: flex;
@@ -86,15 +95,13 @@
             align-items: center;
             color: #fff;
             font-weight: bold;
-            font-size: 13px;
+            font-size: 12px;
             box-shadow: 0 0 10px var(--accent-blue);
             border: 1px solid rgba(255,255,255,0.5);
             z-index: 10;
-            /* 关键修改3：确保节点可以被触摸 */
             touch-action: none; 
             transform: translate(-50%, -50%);
         }
-        
         .node.active {
             background: radial-gradient(circle at 30% 30%, #fff, var(--highlight-gold));
             box-shadow: 0 0 20px var(--highlight-gold);
@@ -102,52 +109,65 @@
             transform: translate(-50%, -50%) scale(1.2);
         }
 
-        /* 移动端适配控制面板 */
+        /* 底部面板适配 */
         .control-panel {
             background: var(--panel-bg);
-            border-top: 2px solid var(--accent-cyan);
-            padding: 10px 15px;
+            border-top: 1px solid var(--accent-cyan);
+            padding: 10px;
             display: flex;
             flex-direction: column;
             gap: 8px;
             z-index: 50;
-            flex-shrink: 0;
-            padding-bottom: 20px; /* iPhone 底部安全区 */
+            flex-shrink: 0; /* 防止被挤压 */
+            
+            /* 关键：适配 iPhone 底部小黑条，防止按钮贴底 */
+            padding-bottom: calc(10px + env(safe-area-inset-bottom));
         }
 
         .status-log {
             text-align: center;
             color: var(--accent-blue);
-            font-size: 12px;
-            height: 18px;
+            font-size: 11px;
+            height: 15px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .controls-row {
             display: flex;
-            justify-content: center;
+            justify-content: space-between; /* 两端对齐，利用屏幕宽度 */
             align-items: center;
             gap: 8px;
-            flex-wrap: wrap;
         }
 
-        .input-group { display: flex; gap: 5px; width: 100%; justify-content: center; }
+        .input-group { 
+            display: flex; 
+            gap: 5px; 
+            flex: 1; /* 占据左侧空间 */
+        }
 
         input {
             background: rgba(0,0,0,0.4);
             border: 1px solid var(--accent-blue);
             color: var(--accent-cyan);
-            padding: 8px;
+            padding: 0 8px;
             border-radius: 4px;
-            width: 100px;
-            font-size: 16px; /* 防止iOS放大 */
+            width: 100%; /* 自适应宽度 */
+            height: 32px;
+            font-size: 14px;
             outline: none;
+            /* 解决 iOS 输入框圆角问题 */
+            -webkit-appearance: none;
+            border-radius: 4px;
         }
 
         button {
             background: rgba(0, 247, 255, 0.1);
             border: 1px solid var(--accent-cyan);
             color: var(--accent-cyan);
-            padding: 8px 12px;
+            padding: 0 10px;
+            height: 32px; /* 统一高度，方便点击 */
             border-radius: 4px;
             font-size: 12px;
             white-space: nowrap;
@@ -156,18 +176,24 @@
         .btn-group-traverse {
             display: flex;
             gap: 4px;
-            background: rgba(0,0,0,0.3);
-            padding: 4px;
-            border-radius: 6px;
-            flex-wrap: wrap;
             justify-content: center;
+            width: 100%;
         }
+        
+        .btn-group-traverse button {
+            flex: 1; /* 按钮平分宽度，方便手指点击 */
+            padding: 0;
+        }
+
+        /* 特殊按钮颜色 */
+        .btn-clear { border-color: #ff4d4d; color: #ff4d4d; }
     </style>
 </head>
 <body>
 
     <div class="title-bar">
-        <h1>二叉树矩阵 <span style="font-size:12px; color:#00f7ff;">MOBILE</span></h1>
+        <h1>二叉树矩阵</h1>
+        <span class="version-tag">MOBILE</span>
     </div>
 
     <div class="main-container" id="treeContainer">
@@ -176,61 +202,56 @@
     </div>
 
     <div class="control-panel">
-        <div class="status-log" id="statusLog">// 移动端触控系统就绪</div>
+        <div class="status-log" id="statusLog">// 系统就绪</div>
         
         <div class="controls-row">
             <div class="input-group">
                 <input type="number" id="valInput" placeholder="数值" onkeydown="if(event.key==='Enter') handleAdd()">
-                <button style="font-weight:bold" onclick="handleAdd()">插入</button>
-                <button style="font-weight:bold" onclick="handleSearch()">查找</button>
             </div>
+            <button style="font-weight:bold" onclick="handleAdd()">插入</button>
+            <button style="font-weight:bold" onclick="handleSearch()">查找</button>
+            <button class="btn-clear" onclick="handleClear()">清空</button>
+        </div>
 
-            <div class="btn-group-traverse">
-                <button onclick="handleTraverse('pre')">前序</button>
-                <button onclick="handleTraverse('in')">中序</button>
-                <button onclick="handleTraverse('post')">后序</button>
-                <button onclick="handleTraverse('level')">层序</button>
-            </div>
-
-            <button style="border-color:#ff4d4d; color:#ff4d4d;" onclick="handleClear()">清空</button>
+        <div class="btn-group-traverse">
+            <button onclick="handleTraverse('pre')">前序</button>
+            <button onclick="handleTraverse('in')">中序</button>
+            <button onclick="handleTraverse('post')">后序</button>
+            <button onclick="handleTraverse('level')">层序</button>
         </div>
     </div>
 
     <script>
-        // ... (数据结构部分保持不变) ...
+        // ... 数据结构 (完全一致) ...
         class TreeNode {
             constructor(val, x = 0, y = 0) {
-                this.val = val;
-                this.left = null;
-                this.right = null;
-                this.x = x; this.y = y;
+                this.val = val; this.left = null; this.right = null; this.x = x; this.y = y;
             }
         }
-
         class BinarySearchTree {
             constructor() { this.root = null; }
             insert(val, containerW) {
                 if (!this.root) {
-                    this.root = new TreeNode(val, containerW / 2, 80);
+                    this.root = new TreeNode(val, containerW / 2, 100); // 初始位置下移一点，避免遮挡
                     return { success: true, node: this.root };
                 }
                 let current = this.root;
                 let depth = 0;
                 while (true) {
                     if (val === current.val) return { success: false, node: current };
-                    // 移动端优化：间距随深度衰减得更快，防止横向爆屏
-                    let offset = (containerW / 2.5) / Math.pow(1.9, depth);
-                    if (offset < 35) offset = 35; 
+                    // 移动端间距优化
+                    let offset = (containerW / 2.2) / Math.pow(1.95, depth);
+                    if (offset < 30) offset = 30; 
 
                     if (val < current.val) {
                         if (!current.left) {
-                            current.left = new TreeNode(val, current.x - offset, current.y + 70);
+                            current.left = new TreeNode(val, current.x - offset, current.y + 60);
                             return { success: true, node: current.left };
                         }
                         current = current.left;
                     } else {
                         if (!current.right) {
-                            current.right = new TreeNode(val, current.x + offset, current.y + 70);
+                            current.right = new TreeNode(val, current.x + offset, current.y + 60);
                             return { success: true, node: current.right };
                         }
                         current = current.right;
@@ -240,7 +261,7 @@
             }
         }
 
-        // ... (渲染部分保持不变) ...
+        // ... 渲染逻辑 ...
         const bst = new BinarySearchTree();
         const container = document.getElementById('treeContainer');
         const svgLayer = document.getElementById('svgLayer');
@@ -253,15 +274,12 @@
         let dragLastPos = { x: 0, y: 0 };
         let isAnimating = false;
 
-        function log(msg) {
-            statusLog.innerText = `// ${msg}`;
-        }
+        function log(msg) { statusLog.innerText = `// ${msg}`; }
 
         function renderTree() {
             svgLayer.innerHTML = '';
             nodesLayer.innerHTML = '';
-            if (!bst.root) return;
-            drawRecursive(bst.root);
+            if (bst.root) drawRecursive(bst.root);
         }
 
         function drawRecursive(node) {
@@ -273,7 +291,6 @@
             div.style.left = node.x + 'px';
             div.style.top = node.y + 'px';
             
-            // 关键修改4：同时绑定鼠标和触摸事件
             div.addEventListener('mousedown', (e) => startDrag(e, node));
             div.addEventListener('touchstart', (e) => startDrag(e, node), { passive: false });
 
@@ -300,9 +317,7 @@
             return `M ${parent.x} ${parent.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${child.x} ${child.y}`;
         }
 
-        // --- 核心：兼容移动端的级联拖拽逻辑 ---
-
-        // 辅助：获取事件坐标（兼容鼠标和触摸）
+        // ... 触控逻辑 ...
         function getEventPos(e) {
             if (e.touches && e.touches.length > 0) {
                 return { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -312,13 +327,11 @@
 
         function startDrag(e, node) {
             if(isAnimating) return;
-            // 关键：触摸时阻止浏览器默认滚动
             if (e.type === 'touchstart') e.preventDefault(); 
             e.stopPropagation();
 
             isDragging = true;
             draggedNodeRoot = node;
-            
             const pos = getEventPos(e);
             dragLastPos.x = pos.x;
             dragLastPos.y = pos.y;
@@ -327,22 +340,19 @@
             document.getElementById(`node-${node.val}`).style.zIndex = 100;
         }
 
-        // 统一的处理移动函数
         function handleMove(e) {
             if (!isDragging || !draggedNodeRoot) return;
-            
-            // 如果是触摸移动，必须阻止默认行为，否则屏幕会卷动
             if(e.type === 'touchmove') e.preventDefault();
 
             const pos = getEventPos(e);
             const dx = pos.x - dragLastPos.x;
             const dy = pos.y - dragLastPos.y;
-
             dragLastPos.x = pos.x;
             dragLastPos.y = pos.y;
 
             moveSubtree(draggedNodeRoot, dx, dy);
             
+            // 实时更新父节点连线
             const parent = findParent(bst.root, draggedNodeRoot.val);
             if (parent) {
                 const linkEl = document.getElementById(`link-${parent.val}-${draggedNodeRoot.val}`);
@@ -350,7 +360,6 @@
             }
         }
 
-        // 统一的处理结束函数
         function handleEnd() {
             if(isDragging && draggedNodeRoot) {
                 const el = document.getElementById(`node-${draggedNodeRoot.val}`);
@@ -361,23 +370,18 @@
             container.style.cursor = 'grab';
         }
 
-        // 绑定全局事件（同时监听 Mouse 和 Touch）
         window.addEventListener('mousemove', handleMove);
-        window.addEventListener('touchmove', handleMove, { passive: false }); // passive: false 允许 preventDefault
-
+        window.addEventListener('touchmove', handleMove, { passive: false });
         window.addEventListener('mouseup', handleEnd);
         window.addEventListener('touchend', handleEnd);
 
-        // --- 递归移动逻辑 (保持不变) ---
+        // ... 递归移动 ...
         function moveSubtree(node, dx, dy) {
             if (!node) return;
             node.x += dx;
             node.y += dy;
             const el = document.getElementById(`node-${node.val}`);
-            if (el) {
-                el.style.left = node.x + 'px';
-                el.style.top = node.y + 'px';
-            }
+            if (el) { el.style.left = node.x + 'px'; el.style.top = node.y + 'px'; }
             if (node.left) {
                 const linkEl = document.getElementById(`link-${node.val}-${node.left.val}`);
                 if (linkEl) linkEl.setAttribute("d", getPathD(node, node.left));
@@ -397,7 +401,7 @@
             return findParent(node.right, val);
         }
 
-        // --- 算法辅助 ---
+        // ... 算法操作 ...
         const sleep = ms => new Promise(r => setTimeout(r, ms));
         async function visitNode(node) {
             const el = document.getElementById(`node-${node.val}`);
@@ -409,19 +413,18 @@
             }
         }
 
-        // --- 按钮事件 ---
         async function handleAdd() {
             if (isAnimating) return;
             const val = parseInt(input.value);
             if (isNaN(val)) return;
+            input.blur(); // 移动端关键：插入后收起键盘！
+            
             const result = bst.insert(val, container.offsetWidth);
             if (result.success) {
                 log(`插入: ${val}`);
                 renderTree(); 
                 await visitNode(result.node);
-            } else {
-                log(`重复: ${val}`);
-            }
+            } else { log(`重复: ${val}`); }
             input.value = '';
         }
 
@@ -429,6 +432,8 @@
             if (isAnimating) return;
             const val = parseInt(input.value);
             if (isNaN(val)) return;
+            input.blur(); // 收起键盘
+            
             isAnimating = true;
             log(`查找: ${val}`);
             let curr = bst.root;
@@ -456,17 +461,16 @@
             isAnimating = true;
             const btns = document.querySelectorAll('button');
             btns.forEach(b => b.disabled = true);
-            
             if (type === 'pre') await preOrder(bst.root);
             else if (type === 'in') await inOrder(bst.root);
             else if (type === 'post') await postOrder(bst.root);
             else if (type === 'level') await levelOrder(bst.root);
-
             isAnimating = false;
             btns.forEach(b => b.disabled = false);
             log("完成");
         }
 
+        // 简化的遍历逻辑
         async function preOrder(node) { if(!node) return; await visitNode(node); await preOrder(node.left); await preOrder(node.right); }
         async function inOrder(node) { if(!node) return; await inOrder(node.left); await visitNode(node); await inOrder(node.right); }
         async function postOrder(node) { if(!node) return; await postOrder(node.left); await postOrder(node.right); await visitNode(node); }
@@ -482,7 +486,7 @@
 
         window.addEventListener('load', () => {
             const w = container.offsetWidth;
-            // 手机屏幕窄，少初始几个节点
+            // 移动端初始只给3个节点，避免太乱
             [50, 30, 70].forEach(v => bst.insert(v, w));
             renderTree();
         });

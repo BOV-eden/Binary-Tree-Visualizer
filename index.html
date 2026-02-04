@@ -3,25 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Sci-Fi Matrix - Ultimate</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+    <title>二叉树 - Final Fix</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #050a14;
-            --panel-bg: rgba(10, 17, 40, 0.9);
-            --accent-cyan: #00f7ff;
-            --accent-blue: #0066ff;
-            --highlight-gold: #ffd700; 
-            --text-color: #aaddff;
-            --grid-line: rgba(0, 247, 255, 0.08);
+            /* 配色：加深了连线颜色，确保可见 */
+            --bg-color: #f8fafc;       
+            --panel-bg: rgba(255, 255, 255, 0.95);
+            --accent-primary: #2563eb; /* 更深的蓝 */
+            --accent-secondary: #60a5fa; 
+            --text-main: #1e293b;
+            --text-sub: #64748b;
+            --line-color: #475569;     /* 🔴 关键修改：连线改成深灰色，不再隐身 */
+            --dot-color: #cbd5e1;
+            --highlight: #f59e0b;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
             background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Orbitron', 'Noto Sans SC', sans-serif;
+            color: var(--text-main);
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
             position: fixed; top: 0; left: 0; width: 100%; height: 100dvh;
             display: flex; flex-direction: column; overflow: hidden;
             touch-action: none; -webkit-user-select: none; user-select: none;
@@ -29,96 +32,123 @@
 
         /* 顶部栏 */
         .title-bar {
-            height: 44px;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(8px);
+            height: 48px;
+            background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(12px);
             display: flex; align-items: center; justify-content: space-between;
-            padding: 0 15px; border-bottom: 1px solid var(--accent-blue);
+            padding: 0 16px; border-bottom: 1px solid #e2e8f0;
             flex-shrink: 0; padding-top: env(safe-area-inset-top);
             z-index: 100;
         }
-        .title-bar h1 { font-size: 14px; color: #fff; margin: 0; }
-        .zoom-controls { display: flex; gap: 10px; }
-        .zoom-btn { background: rgba(0, 247, 255, 0.1); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); width: 24px; height: 24px; border-radius: 4px; display: flex; justify-content: center; align-items: center; font-size: 16px; cursor: pointer; }
+        .title-bar h1 { font-size: 16px; font-weight: 700; color: #0f172a; margin: 0; }
+        
+        .zoom-controls { display: flex; gap: 8px; }
+        .zoom-btn { 
+            background: #fff; border: 1px solid #cbd5e1; color: #334155; 
+            width: 30px; height: 30px; border-radius: 8px; 
+            display: flex; justify-content: center; align-items: center; 
+            font-size: 18px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
 
         /* 视口 */
         .viewport {
-            flex: 1;
-            position: relative;
-            overflow: hidden;
-            width: 100%; height: 100%;
-            cursor: grab;
-            /* 静态背景，不随缩放移动，避免眩晕 */
-            background-image: 
-                linear-gradient(30deg, var(--grid-line) 12%, transparent 12.5%, transparent 87%, var(--grid-line) 87.5%, var(--grid-line)),
-                linear-gradient(150deg, var(--grid-line) 12%, transparent 12.5%, transparent 87%, var(--grid-line) 87.5%, var(--grid-line));
-            background-size: 40px 70px;
+            flex: 1; position: relative; overflow: hidden;
+            width: 100%; height: 100%; cursor: grab;
+            background-image: radial-gradient(var(--dot-color) 1.5px, transparent 1.5px);
+            background-size: 24px 24px;
         }
         .viewport:active { cursor: grabbing; }
 
-        /* --- 世界层：承载缩放和平移 --- */
+        /* 世界层 */
         #worldLayer {
-            position: absolute;
-            top: 0; left: 0;
-            width: 0; height: 0;
-            transform-origin: 0 0; /* 变换原点 */
-            will-change: transform;
-            z-index: 10;
+            position: absolute; top: 0; left: 0; width: 0; height: 0;
+            transform-origin: 0 0; will-change: transform; z-index: 10;
         }
 
-        /* SVG 修复：允许溢出，不设固定大小，让线自动延伸 */
+        /* 🔴 核心修复：SVG 样式 */
         svg {
-            position: absolute;
+            position: absolute; 
             top: 0; left: 0;
-            width: 0; height: 0; /* 关键：尺寸为0，但允许溢出显示 */
-            overflow: visible; /* 关键：让线能画到盒子外面去 */
-            pointer-events: none;
-            z-index: 1;
+            /* 关键：给它一个物理尺寸，防止浏览器不渲染 */
+            width: 10px; height: 10px; 
+            /* 关键：允许内容溢出这个 10px 的盒子 */
+            overflow: visible !important; 
+            pointer-events: none; 
+            z-index: 1; /* 确保在线在节点下面，但背景上面 */
         }
 
-        .link { fill: none; stroke: var(--accent-cyan); stroke-width: 2; opacity: 0.6; vector-effect: non-scaling-stroke; /* 关键：缩放时线条不变更粗 */ }
+        .link { 
+            fill: none; 
+            stroke: var(--line-color); 
+            stroke-width: 2px;
+            /* 移除 vector-effect，防止某些旧浏览器兼容性问题，我们手动控制粗细 */
+            opacity: 1;
+        }
 
+        /* 节点 */
         .node {
             position: absolute;
-            width: 44px; height: 44px;
-            background: radial-gradient(circle at 30% 30%, var(--accent-cyan), var(--accent-blue));
+            width: 48px; height: 48px;
+            background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
             border-radius: 50%;
             display: flex; justify-content: center; align-items: center;
-            color: #fff; font-weight: bold; font-size: 12px;
-            box-shadow: 0 0 10px var(--accent-blue);
-            border: 1px solid rgba(255,255,255,0.5);
+            color: #fff; font-weight: 600; font-size: 14px;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            border: 2px solid #fff;
             z-index: 10;
-            transform: translate(-50%, -50%); /* 居中定位 */
+            transform: translate(-50%, -50%);
             touch-action: none;
         }
         .node.active {
-            background: radial-gradient(circle at 30% 30%, #fff, var(--highlight-gold));
-            box-shadow: 0 0 20px var(--highlight-gold);
-            color: #000; transform: translate(-50%, -50%) scale(1.2);
+            background: var(--highlight);
+            box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.2);
+            transform: translate(-50%, -50%) scale(1.15);
+            border-color: #fff;
+            z-index: 20;
         }
 
-        /* 底部面板 */
+        /* 底部控制面板 */
         .control-panel {
             background: var(--panel-bg);
-            border-top: 1px solid var(--accent-cyan);
-            padding: 10px;
-            display: flex; flex-direction: column; gap: 8px; z-index: 100; flex-shrink: 0;
-            padding-bottom: calc(10px + env(safe-area-inset-bottom));
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
+            border-top: 1px solid #e2e8f0;
+            padding: 12px 16px;
+            display: flex; flex-direction: column; gap: 10px; z-index: 100; flex-shrink: 0;
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
         }
-        .status-log { text-align: center; color: var(--accent-blue); font-size: 11px; height: 15px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        .status-log { text-align: center; color: var(--text-sub); font-size: 12px; height: 16px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        
         .controls-row { display: flex; align-items: center; gap: 8px; }
-        .input-group { display: flex; gap: 5px; flex: 1; }
-        input { background: rgba(0,0,0,0.4); border: 1px solid var(--accent-blue); color: var(--accent-cyan); padding: 0 8px; border-radius: 4px; width: 100%; height: 32px; font-size: 14px; outline: none; -webkit-appearance: none; }
-        button { background: rgba(0, 247, 255, 0.1); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 0 10px; height: 32px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
-        .btn-group-traverse { display: flex; gap: 4px; width: 100%; }
-        .btn-group-traverse button { flex: 1; padding: 0; }
-        .btn-clear { border-color: #ff4d4d; color: #ff4d4d; }
+        .input-group { display: flex; gap: 6px; flex: 1; }
+        
+        input { 
+            background: #f1f5f9; border: 1px solid #cbd5e1; color: #0f172a; 
+            padding: 0 10px; border-radius: 8px; width: 100%; height: 40px; 
+            font-size: 16px; /* 防止 iOS 缩放 */
+            outline: none; -webkit-appearance: none;
+        }
+        
+        button { 
+            background: #fff; border: 1px solid #cbd5e1; color: #475569; 
+            padding: 0 14px; height: 40px; border-radius: 8px; font-size: 14px; 
+            font-weight: 600; white-space: nowrap; cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        button:active { background: #f1f5f9; transform: scale(0.96); }
+        
+        button.primary { background: var(--accent-primary); color: #fff; border: none; box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3); }
+        button.primary:active { background: #1d4ed8; }
+        
+        .btn-group-traverse { display: flex; gap: 8px; width: 100%; }
+        .btn-group-traverse button { flex: 1; padding: 0; font-size: 13px; color: #475569; }
+        
+        .btn-clear { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
     </style>
 </head>
 <body>
 
     <div class="title-bar">
-        <h1>无限缩放矩阵</h1>
+        <h1>二叉树</h1>
         <div class="zoom-controls">
             <div class="zoom-btn" onclick="zoomOut()">-</div>
             <div class="zoom-btn" onclick="zoomIn()">+</div>
@@ -133,14 +163,14 @@
     </div>
 
     <div class="control-panel">
-        <div class="status-log" id="statusLog">// 双指捏合或滚轮可缩放</div>
+        <div class="status-log" id="statusLog">Ready. Drag to pan, pinch to zoom.</div>
         
         <div class="controls-row">
             <div class="input-group">
-                <input type="number" id="valInput" placeholder="数值" onkeydown="if(event.key==='Enter') handleAdd()">
+                <input type="number" id="valInput" placeholder="输入数字" onkeydown="if(event.key==='Enter') handleAdd()">
             </div>
-            <button style="font-weight:bold" onclick="handleAdd()">插入</button>
-            <button style="font-weight:bold" onclick="handleSearch()">查找</button>
+            <button class="primary" onclick="handleAdd()">插入</button>
+            <button onclick="handleSearch()">查找</button>
             <button class="btn-clear" onclick="handleClear()">清空</button>
         </div>
 
@@ -156,17 +186,17 @@
         // --- 核心视图状态 ---
         const viewState = { 
             x: window.innerWidth / 2, 
-            y: window.innerHeight / 2, 
+            y: window.innerHeight / 4, 
             scale: 1 
         };
         let isAnimating = false;
 
-        // --- 数据结构 ---
         class TreeNode {
             constructor(val, x = 0, y = 0) {
                 this.val = val; this.left = null; this.right = null; this.x = x; this.y = y;
             }
         }
+        
         class BinarySearchTree {
             constructor() { this.root = null; }
             insert(val) {
@@ -178,17 +208,17 @@
                 let depth = 0;
                 while (true) {
                     if (val === current.val) return { success: false, node: current };
-                    let offset = 180 / Math.pow(1.8, depth);
-                    if (offset < 40) offset = 40; 
+                    let offset = 200 / Math.pow(1.85, depth);
+                    if (offset < 50) offset = 50; 
                     if (val < current.val) {
                         if (!current.left) {
-                            current.left = new TreeNode(val, current.x - offset, current.y + 80);
+                            current.left = new TreeNode(val, current.x - offset, current.y + 90);
                             return { success: true, node: current.left };
                         }
                         current = current.left;
                     } else {
                         if (!current.right) {
-                            current.right = new TreeNode(val, current.x + offset, current.y + 80);
+                            current.right = new TreeNode(val, current.x + offset, current.y + 90);
                             return { success: true, node: current.right };
                         }
                         current = current.right;
@@ -198,7 +228,6 @@
             }
         }
 
-        // --- 渲染引擎 ---
         const bst = new BinarySearchTree();
         const worldLayer = document.getElementById('worldLayer');
         const svgLayer = document.getElementById('svgLayer');
@@ -206,7 +235,7 @@
         const statusLog = document.getElementById('statusLog');
         const input = document.getElementById('valInput');
 
-        function log(msg) { statusLog.innerText = `// ${msg}`; }
+        function log(msg) { statusLog.innerText = msg; }
 
         function renderTree() {
             svgLayer.innerHTML = '';
@@ -228,8 +257,10 @@
             div.addEventListener('touchstart', startHandler, { passive: false });
 
             nodesLayer.appendChild(div);
+            
             if (node.left) drawLine(node, node.left);
             if (node.right) drawLine(node, node.right);
+            
             drawRecursive(node.left);
             drawRecursive(node.right);
         }
@@ -239,11 +270,13 @@
             path.setAttribute("id", `link-${parent.val}-${child.val}`);
             path.setAttribute("class", "link");
             path.setAttribute("d", getPathD(parent, child));
+            // 🔴 手动设置 stroke-width，确保缩放时线不会太细或太粗
+            // 这里的逻辑是：不需要随缩放变细，就用固定值
+            path.style.strokeWidth = "2px"; 
             svgLayer.appendChild(path);
         }
 
         function getPathD(parent, child) {
-            // SVG 坐标不需要转换，直接使用世界坐标，因为 SVG 也在 worldLayer 里一起被缩放
             const cx1 = parent.x; 
             const cy1 = parent.y + (child.y - parent.y) * 0.5;
             const cx2 = child.x;
@@ -251,14 +284,13 @@
             return `M ${parent.x} ${parent.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${child.x} ${child.y}`;
         }
 
-        // --- 交互控制 (缩放 + 拖动) ---
+        // --- 交互系统 ---
         const viewport = document.getElementById('viewport');
-        let mode = null; // 'PAN' or 'NODE'
+        let mode = null; 
         let startPos = { x: 0, y: 0 };
         let draggedNode = null;
-        let lastDist = 0; // 用于双指缩放
+        let lastDist = 0;
 
-        // 统一变换更新
         function updateTransform() {
             worldLayer.style.transform = `translate3d(${viewState.x}px, ${viewState.y}px, 0) scale(${viewState.scale})`;
         }
@@ -268,11 +300,9 @@
             return { x: e.clientX, y: e.clientY };
         }
 
-        // 1. 开始交互
         function startInteraction(e, action, node = null) {
             if (isAnimating) return;
-            // 双指操作不处理
-            if (e.touches && e.touches.length === 2) return;
+            if (e.touches && e.touches.length === 2) return; 
 
             if (e.type === 'touchstart') e.preventDefault();
             e.stopPropagation();
@@ -287,50 +317,6 @@
             }
             viewport.style.cursor = 'grabbing';
         }
-
-        // 2. 移动交互
-        function handleMove(e) {
-            // 处理双指缩放 (Pinch)
-            if (e.touches && e.touches.length === 2) {
-                e.preventDefault();
-                const dist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                if (lastDist > 0) {
-                    const delta = dist / lastDist;
-                    applyZoom(delta);
-                }
-                lastDist = dist;
-                return;
-            }
-
-            if (!mode) return;
-            if (e.type === 'touchmove') e.preventDefault();
-
-            const pos = getClientPos(e);
-            // 关键：计算位移时要除以缩放比例，保证鼠标动多少，物体动多少
-            const dx = (pos.x - startPos.x) / (mode === 'NODE' ? viewState.scale : 1);
-            const dy = (pos.y - startPos.y) / (mode === 'NODE' ? viewState.scale : 1);
-            
-            // 记录新位置
-            startPos = { x: pos.x, y: pos.y };
-
-            if (mode === 'PAN') {
-                // 平移画布 (无需除以 scale)
-                viewState.x += (pos.x - startPos.x + (mode === 'NODE' ? 0 : dx)); // 修正逻辑
-                viewState.x += dx; 
-                viewState.y += dy;
-                updateTransform();
-            } else if (mode === 'NODE') {
-                moveSubtree(draggedNode, dx, dy);
-                updateNodeLink(draggedNode);
-            }
-        }
-
-        // 修正平移逻辑的 handleMove (上面那个逻辑稍微有点乱，这里拆分清晰点)
-        window.removeEventListener('mousemove', handleMove); // 移除旧的防止冲突
-        window.removeEventListener('touchmove', handleMove);
 
         function onMove(e) {
              // Pinch
@@ -361,7 +347,6 @@
                 viewState.y += rawDy;
                 updateTransform();
             } else if (mode === 'NODE') {
-                // 拖动节点时，必须除以 scale，否则放大后拖动会变得非常快
                 const scaleDx = rawDx / viewState.scale;
                 const scaleDy = rawDy / viewState.scale;
                 moveSubtree(draggedNode, scaleDx, scaleDy);
@@ -369,10 +354,6 @@
             }
         }
 
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('touchmove', onMove, { passive: false });
-
-        // 3. 结束交互
         function handleEnd() {
             if (mode === 'NODE' && draggedNode) {
                 const el = document.getElementById(`node-${draggedNode.val}`);
@@ -380,36 +361,34 @@
             }
             mode = null;
             draggedNode = null;
-            lastDist = 0; // 重置 pinch 距离
+            lastDist = 0;
             viewport.style.cursor = 'grab';
         }
 
         viewport.addEventListener('mousedown', (e) => startInteraction(e, 'PAN'));
         viewport.addEventListener('touchstart', (e) => startInteraction(e, 'PAN'), { passive: false });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, { passive: false });
         window.addEventListener('mouseup', handleEnd);
         window.addEventListener('touchend', handleEnd);
 
         // --- 缩放逻辑 ---
         function applyZoom(delta) {
             let newScale = viewState.scale * delta;
-            // 限制缩放范围
             if (newScale < 0.2) newScale = 0.2;
             if (newScale > 3) newScale = 3;
             viewState.scale = newScale;
             updateTransform();
         }
-
-        function zoomIn() { applyZoom(1.2); }
-        function zoomOut() { applyZoom(0.8); }
-
-        // 鼠标滚轮缩放
+        function zoomIn() { applyZoom(1.1); }
+        function zoomOut() { applyZoom(0.9); }
         viewport.addEventListener('wheel', (e) => {
             e.preventDefault();
             const delta = e.deltaY > 0 ? 0.9 : 1.1;
             applyZoom(delta);
         }, { passive: false });
 
-        // --- 辅助逻辑 (移动子树) ---
+        // --- 辅助逻辑 ---
         function moveSubtree(node, dx, dy) {
             if (!node) return;
             node.x += dx; node.y += dy;
@@ -440,15 +419,9 @@
             return findParent(node.right, val);
         }
 
-        // --- 自动聚焦 & 动画 ---
         const sleep = ms => new Promise(r => setTimeout(r, ms));
         
         function focusOnNode(x, y) {
-            // 简单的聚焦：将节点移动到屏幕中心
-            // 计算 offset: 屏幕中心 - (节点坐标 * 缩放)
-            // 注意：因为 translate 是在 scale 之前的，所以逻辑是：
-            // screenX = worldX * scale + transX
-            // => transX = screenX - worldX * scale
             const screenCx = viewport.offsetWidth / 2;
             const screenCy = viewport.offsetHeight / 2;
             viewState.x = screenCx - x * viewState.scale;
@@ -457,9 +430,7 @@
         }
 
         async function visitNode(node) {
-            // 自动聚焦
-            if(!isAnimating) focusOnNode(node.x, node.y); 
-
+            if(!isAnimating) focusOnNode(node.x, node.y);
             const el = document.getElementById(`node-${node.val}`);
             if(el) {
                 el.classList.add('active');
@@ -477,12 +448,12 @@
 
             const result = bst.insert(val);
             if (result.success) {
-                log(`插入: ${val}`);
+                log(`已插入: ${val}`);
                 renderTree();
-                focusOnNode(result.node.x, result.node.y); // 聚焦新节点
+                focusOnNode(result.node.x, result.node.y);
                 await visitNode(result.node);
             } else { 
-                log(`重复: ${val}`); 
+                log(`节点 ${val} 已存在`); 
                 focusOnNode(result.node.x, result.node.y);
             }
             input.value = '';
@@ -494,30 +465,38 @@
             if (isNaN(val)) return;
             input.blur();
             isAnimating = true;
-            log(`查找: ${val}`);
+            log(`正在查找: ${val}...`);
             let curr = bst.root;
             if(curr) focusOnNode(curr.x, curr.y);
             await sleep(500);
 
+            let found = false;
             while(curr) {
                 const el = document.getElementById(`node-${curr.val}`);
                 if(el) el.classList.add('active');
-                focusOnNode(curr.x, curr.y); // 镜头跟随
+                focusOnNode(curr.x, curr.y);
                 await sleep(400);
                 if(curr.val === val) {
                     log(`找到: ${val}`);
+                    found = true;
                     setTimeout(() => { if(el) el.classList.remove('active'); }, 1000);
-                    isAnimating = false;
-                    return;
+                    break;
                 }
                 if(el) el.classList.remove('active');
                 curr = val < curr.val ? curr.left : curr.right;
             }
-            log(`未找到`);
+            if(!found) log(`未找到 ${val}`);
             isAnimating = false;
         }
 
-        function handleClear() { bst.root = null; renderTree(); log("已清空"); }
+        function handleClear() { 
+            bst.root = null; renderTree(); 
+            viewState.x = window.innerWidth / 2;
+            viewState.y = window.innerHeight / 4;
+            viewState.scale = 1;
+            updateTransform();
+            log("画布已清空"); 
+        }
 
         async function handleTraverse(type) {
             if (isAnimating || !bst.root) return;
@@ -526,14 +505,13 @@
             btns.forEach(b => b.disabled = true);
             focusOnNode(bst.root.x, bst.root.y);
             await sleep(500);
-
             if (type === 'pre') await preOrder(bst.root);
             else if (type === 'in') await inOrder(bst.root);
             else if (type === 'post') await postOrder(bst.root);
             else if (type === 'level') await levelOrder(bst.root);
             isAnimating = false;
             btns.forEach(b => b.disabled = false);
-            log("完成");
+            log("遍历完成");
         }
         
         async function preOrder(node) { if(!node) return; await visitNode(node); await preOrder(node.left); await preOrder(node.right); }
@@ -551,9 +529,8 @@
 
         window.addEventListener('load', () => {
             updateTransform();
-            [50, 30, 70].forEach(v => bst.insert(v));
+            [40,50,20,30,10,45,70].forEach(v => bst.insert(v));
             renderTree();
-            if(bst.root) focusOnNode(bst.root.x, bst.root.y);
         });
     </script>
 </body>

@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二叉树可视化矩阵 - 级联拖拽版</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- 1. 科幻蓝配色系统 --- */
+        :root {
+            --bg-color: #050a14;
+            --panel-bg: rgba(10, 17, 40, 0.85);
+            --accent-cyan: #00f7ff;
+            --accent-blue: #0066ff;
+            --highlight-gold: #ffd700; 
+            --text-color: #aaddff;
+            --grid-line: rgba(0, 247, 255, 0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Orbitron', 'Noto Sans SC', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background-image: 
+                linear-gradient(30deg, var(--grid-line) 12%, transparent 12.5%, transparent 87%, var(--grid-line) 87.5%, var(--grid-line)),
+                linear-gradient(150deg, var(--grid-line) 12%, transparent 12.5%, transparent 87%, var(--grid-line) 87.5%, var(--grid-line)),
+                radial-gradient(circle at 50% 50%, rgba(0, 102, 255, 0.15), transparent 70%);
+            background-size: 40px 70px, 40px 70px, 100% 100%;
+            background-position: 0 0, 0 0, 0 0;
+        }
+
+        /* --- 顶部栏 --- */
+        .title-bar {
+            height: 50px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--accent-blue);
+            box-shadow: 0 0 15px rgba(0, 102, 255, 0.3);
+            z-index: 100;
+        }
+        .title-bar h1 { font-size: 18px; letter-spacing: 1px; color: #fff; }
+
+        /* --- 画布区域 --- */
+        .main-container {
+            flex: 1;
+            position: relative;
+            cursor: grab;
+            overflow: hidden;
+        }
+        .main-container:active { cursor: grabbing; }
+
+        svg {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            filter: drop-shadow(0 0 3px var(--accent-cyan));
+        }
+
+        .link {
+            fill: none;
+            stroke: var(--accent-cyan);
+            stroke-width: 2;
+            opacity: 0.6;
+            transition: none; 
+        }
+
+        /* 节点样式 */
+        .node {
+            position: absolute;
+            width: 50px; 
+            height: 50px;
+            background: radial-gradient(circle at 30% 30%, var(--accent-cyan), var(--accent-blue));
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 0 10px var(--accent-blue), inset 0 0 5px #fff;
+            border: 1px solid rgba(255,255,255,0.5);
+            z-index: 10;
+            cursor: grab;
+            user-select: none;
+            transform: translate(-50%, -50%);
+          
+        }
+        
+        .node:hover {
+            transform: translate(-50%, -50%) scale(1.15);
+            box-shadow: 0 0 20px var(--accent-cyan);
+            z-index: 20;
+        }
+
+        .node.active {
+            background: radial-gradient(circle at 30% 30%, #fff, var(--highlight-gold));
+            box-shadow: 0 0 30px var(--highlight-gold), inset 0 0 10px #fff;
+            color: #000;
+            border-color: #fff;
+            transform: translate(-50%, -50%) scale(1.25);
+            z-index: 30;
+        }
+
+        /* --- 底部控制面板 --- */
+        .control-panel {
+            background: var(--panel-bg);
+            border-top: 2px solid var(--accent-cyan);
+            padding: 15px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 50;
+            box-shadow: 0 -5px 30px rgba(0, 247, 255, 0.15);
+        }
+
+        .status-log {
+            text-align: center;
+            color: var(--accent-blue);
+            font-size: 13px;
+            height: 20px;
+            line-height: 20px;
+            font-family: 'Consolas', monospace;
+            text-shadow: 0 0 5px rgba(0, 102, 255, 0.5);
+        }
+
+        .controls-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .input-group { display: flex; gap: 5px; }
+
+        input {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--accent-blue);
+            color: var(--accent-cyan);
+            padding: 8px 12px;
+            border-radius: 4px;
+            width: 140px;
+            outline: none;
+            font-family: inherit;
+        }
+        input:focus { border-color: var(--accent-cyan); box-shadow: 0 0 8px var(--accent-blue); }
+
+        .btn-group-traverse {
+            display: flex;
+            gap: 5px;
+            background: rgba(0,0,0,0.3);
+            padding: 4px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 247, 255, 0.2);
+        }
+
+        button {
+            background: rgba(0, 247, 255, 0.05);
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        button:hover { background: var(--accent-cyan); color: #000; box-shadow: 0 0 15px var(--accent-cyan); }
+        button:disabled { border-color: #555; color: #555; cursor: not-allowed; box-shadow: none; background: transparent; }
+        .btn-action { font-weight: bold; }
+        .btn-clear { border-color: #ff4d4d; color: #ff4d4d; }
+        .btn-clear:hover { background: #ff4d4d; color: #fff; box-shadow: 0 0 15px #ff4d4d; }
+
+    </style>
+</head>
+<body>
+
+    <div class="title-bar">
+        <h1>二叉树可视化矩阵 <span style="font-size:12px; margin-left:10px; color:#00f7ff;">V4.0 CASCADE</span></h1>
+    </div>
+
+    <div class="main-container" id="treeContainer">
+        <svg id="svgLayer"></svg>
+        <div id="nodesLayer"></div>
+    </div>
+
+    <div class="control-panel">
+        <div class="status-log" id="statusLog">// 系统就绪。拖动节点体验级联移动。</div>
+        
+        <div class="controls-row">
+            <div class="input-group">
+                <input type="number" id="valInput" placeholder="输入整数" onkeydown="if(event.key==='Enter') handleAdd()">
+                <button class="btn-action" onclick="handleAdd()">插入节点</button>
+                <button class="btn-action" onclick="handleSearch()">查找</button>
+            </div>
+
+            <div style="width: 1px; height: 30px; background: rgba(255,255,255,0.1);"></div>
+
+            <div class="btn-group-traverse">
+                <button onclick="handleTraverse('pre')">前序遍历</button>
+                <button onclick="handleTraverse('in')">中序遍历</button>
+                <button onclick="handleTraverse('post')">后序遍历</button>
+                <button onclick="handleTraverse('level')">层序遍历</button>
+            </div>
+
+            <button class="btn-clear" onclick="handleClear()">清空画布</button>
+        </div>
+    </div>
+
+    <script>
+        // =========================================
+        //  1. 数据结构
+        // =========================================
+        
+        class TreeNode {
+            constructor(val, x = 0, y = 0) {
+                this.val = val;
+                this.left = null;
+                this.right = null;
+                this.x = x; 
+                this.y = y;
+            }
+        }
+
+        class BinarySearchTree {
+            constructor() {
+                this.root = null;
+            }
+
+            insert(val, containerW) {
+                if (!this.root) {
+                    this.root = new TreeNode(val, containerW / 2, 80);
+                    return { success: true, node: this.root };
+                }
+
+                let current = this.root;
+                let depth = 0;
+
+                while (true) {
+                    if (val === current.val) return { success: false, node: current }; 
+
+                    // 动态间距，随深度减小
+                    let offset = 220 / Math.pow(1.8, depth); 
+                    if (offset < 45) offset = 45;
+
+                    if (val < current.val) {
+                        if (!current.left) {
+                            // 关键：相对于父节点当前的坐标
+                            current.left = new TreeNode(val, current.x - offset, current.y + 80);
+                            return { success: true, node: current.left };
+                        }
+                        current = current.left;
+                    } else {
+                        if (!current.right) {
+                            // 关键：相对于父节点当前的坐标
+                            current.right = new TreeNode(val, current.x + offset, current.y + 80);
+                            return { success: true, node: current.right };
+                        }
+                        current = current.right;
+                    }
+                    depth++;
+                }
+            }
+        }
+
+        // =========================================
+        //  2. 渲染与交互核心 
+        // =========================================
+        
+        const bst = new BinarySearchTree();
+        const container = document.getElementById('treeContainer');
+        const svgLayer = document.getElementById('svgLayer');
+        const nodesLayer = document.getElementById('nodesLayer');
+        const statusLog = document.getElementById('statusLog');
+        const input = document.getElementById('valInput');
+
+        let isDragging = false;
+        let draggedNodeRoot = null; // 当前拖拽的子树根节点
+        let dragLastPos = { x: 0, y: 0 }; // 记录上一帧鼠标位置
+        let isAnimating = false;
+
+        function log(msg) {
+            statusLog.innerText = `// ${msg}`;
+            statusLog.style.opacity = 0.5;
+            setTimeout(() => statusLog.style.opacity = 1, 100);
+        }
+
+        function renderTree() {
+            svgLayer.innerHTML = '';
+            nodesLayer.innerHTML = '';
+            if (!bst.root) return;
+            drawRecursive(bst.root);
+        }
+
+        function drawRecursive(node) {
+            if (!node) return;
+
+            // DOM 节点
+            const div = document.createElement('div');
+            div.className = 'node';
+            div.id = `node-${node.val}`;
+            div.innerText = node.val;
+            div.style.left = node.x + 'px';
+            div.style.top = node.y + 'px';
+            
+            div.addEventListener('mousedown', (e) => startDrag(e, node));
+            nodesLayer.appendChild(div);
+
+            // 连线
+            if (node.left) drawLine(node, node.left);
+            if (node.right) drawLine(node, node.right);
+
+            drawRecursive(node.left);
+            drawRecursive(node.right);
+        }
+
+        function drawLine(parent, child) {
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("id", `link-${parent.val}-${child.val}`);
+            path.setAttribute("class", "link");
+            path.setAttribute("d", getPathD(parent, child));
+            svgLayer.appendChild(path);
+        }
+
+        function getPathD(parent, child) {
+            const cx1 = parent.x; 
+            const cy1 = parent.y + (child.y - parent.y) * 0.5;
+            const cx2 = child.x;
+            const cy2 = child.y - (child.y - parent.y) * 0.5;
+            return `M ${parent.x} ${parent.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${child.x} ${child.y}`;
+        }
+
+        // --- 核心：级联拖拽逻辑 ---
+
+        function startDrag(e, node) {
+            if(isAnimating) return;
+            e.stopPropagation();
+            isDragging = true;
+            draggedNodeRoot = node;
+            
+            // 记录初始鼠标位置，用于计算下一帧的差值 (Delta)
+            dragLastPos.x = e.clientX;
+            dragLastPos.y = e.clientY;
+            
+            container.style.cursor = 'grabbing';
+            // 临时提高拖拽子树的层级，视觉上更好
+            document.getElementById(`node-${node.val}`).style.zIndex = 100;
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging || !draggedNodeRoot) return;
+            e.preventDefault();
+
+            // 1. 计算鼠标位移差值 (Delta)
+            const dx = e.clientX - dragLastPos.x;
+            const dy = e.clientY - dragLastPos.y;
+
+            // 更新上一帧位置为当前位置，为下一次计算做准备
+            dragLastPos.x = e.clientX;
+            dragLastPos.y = e.clientY;
+
+            // 2. 递归更新子树所有节点位置
+            moveSubtree(draggedNodeRoot, dx, dy);
+
+            // 3. 更新连接到子树根节点的那根线
+            const parent = findParent(bst.root, draggedNodeRoot.val);
+            if (parent) {
+                const linkId = `link-${parent.val}-${draggedNodeRoot.val}`;
+                const linkEl = document.getElementById(linkId);
+                if (linkEl) linkEl.setAttribute("d", getPathD(parent, draggedNodeRoot));
+            }
+        });
+
+        // 递归移动函数
+        function moveSubtree(node, dx, dy) {
+            if (!node) return;
+
+            // 更新数据模型
+            node.x += dx;
+            node.y += dy;
+
+            // 更新视图 (DOM)
+            const el = document.getElementById(`node-${node.val}`);
+            if (el) {
+                el.style.left = node.x + 'px';
+                el.style.top = node.y + 'px';
+            }
+
+            // 更新连出的线 (连接子节点的线)
+            if (node.left) {
+                const linkEl = document.getElementById(`link-${node.val}-${node.left.val}`);
+                if (linkEl) linkEl.setAttribute("d", getPathD(node, node.left));
+                // 递归处理左子树
+                moveSubtree(node.left, dx, dy);
+            }
+            if (node.right) {
+                const linkEl = document.getElementById(`link-${node.val}-${node.right.val}`);
+                if (linkEl) linkEl.setAttribute("d", getPathD(node, node.right));
+                // 递归处理右子树
+                moveSubtree(node.right, dx, dy);
+            }
+        }
+
+        window.addEventListener('mouseup', () => {
+            if(isDragging && draggedNodeRoot) {
+                document.getElementById(`node-${draggedNodeRoot.val}`).style.zIndex = ''; // 恢复层级
+            }
+            isDragging = false;
+            draggedNodeRoot = null;
+            container.style.cursor = 'grab';
+        });
+
+        function findParent(node, val) {
+            if (!node) return null;
+            if ((node.left && node.left.val === val) || (node.right && node.right.val === val)) return node;
+            if (val < node.val) return findParent(node.left, val);
+            return findParent(node.right, val);
+        }
+
+        // --- 算法辅助 ---
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        
+        async function visitNode(node, msgPrefix) {
+            const el = document.getElementById(`node-${node.val}`);
+            if(el) {
+                el.classList.add('active');
+                log(`${msgPrefix}: [${node.val}]`);
+                await sleep(600);
+                el.classList.remove('active');
+                await sleep(200);
+            }
+        }
+
+        // --- 按钮事件 ---
+
+        async function handleAdd() {
+            if (isAnimating) return;
+            const val = parseInt(input.value);
+            if (isNaN(val)) return;
+
+            // 1. 插入数据
+            const result = bst.insert(val, container.offsetWidth);
+            
+            if (result.success) {
+                log(`插入节点: ${val}`);
+                // 2. 增量渲染 (仅添加新节点DOM，不重置其他节点)
+                renderTree(); 
+                await visitNode(result.node, "新节点");
+            } else {
+                log(`节点 ${val} 已存在`);
+                const el = document.getElementById(`node-${val}`);
+                if(el) {
+                    el.classList.add('active');
+                    setTimeout(() => el.classList.remove('active'), 500);
+                }
+            }
+            input.value = '';
+        }
+
+        async function handleSearch() {
+            if (isAnimating) return;
+            const val = parseInt(input.value);
+            if (isNaN(val)) return;
+
+            isAnimating = true;
+            log(`正在查找: ${val}...`);
+            let curr = bst.root;
+            let found = false;
+
+            while(curr) {
+                const el = document.getElementById(`node-${curr.val}`);
+                if(el) el.classList.add('active');
+                await sleep(500);
+
+                if(curr.val === val) {
+                    log(`目标锁定: [${val}]`);
+                    found = true;
+                    setTimeout(() => { if(el) el.classList.remove('active'); }, 1000);
+                    break;
+                }
+                
+                if(el) el.classList.remove('active');
+                if(val < curr.val) curr = curr.left;
+                else curr = curr.right;
+            }
+
+            if(!found) log(`未找到节点 ${val}`);
+            isAnimating = false;
+        }
+
+        function handleClear() {
+            if (isAnimating) return;
+            bst.root = null;
+            renderTree();
+            log("画布已重置");
+        }
+
+        async function handleTraverse(type) {
+            if (isAnimating || !bst.root) return;
+            isAnimating = true;
+            const btns = document.querySelectorAll('button');
+            btns.forEach(b => b.disabled = true);
+
+            if (type === 'pre') await preOrder(bst.root);
+            else if (type === 'in') await inOrder(bst.root);
+            else if (type === 'post') await postOrder(bst.root);
+            else if (type === 'level') await levelOrder(bst.root);
+
+            isAnimating = false;
+            btns.forEach(b => b.disabled = false);
+            log("遍历完成");
+        }
+
+        async function preOrder(node) {
+            if(!node) return;
+            await visitNode(node, "前序");
+            await preOrder(node.left);
+            await preOrder(node.right);
+        }
+        async function inOrder(node) {
+            if(!node) return;
+            await inOrder(node.left);
+            await visitNode(node, "中序");
+            await inOrder(node.right);
+        }
+        async function postOrder(node) {
+            if(!node) return;
+            await postOrder(node.left);
+            await postOrder(node.right);
+            await visitNode(node, "后序");
+        }
+        async function levelOrder(root) {
+            const q = [root];
+            while(q.length) {
+                const n = q.shift();
+                await visitNode(n, "层序");
+                if(n.left) q.push(n.left);
+                if(n.right) q.push(n.right);
+            }
+        }
+
+        // 初始数据
+        window.addEventListener('load', () => {
+            const w = container.offsetWidth;
+            // 模拟一些初始插入
+            [50, 30, 70, 20, 40].forEach(v => bst.insert(v, w));
+            renderTree();
+        });
+
+    </script>
+</body>
+</html>

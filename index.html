@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>二叉树可视化 - MobileAdapted</title>
+    <title>二叉树可视化 - Infinite Canvas</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -22,187 +22,146 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             font-family: 'Orbitron', 'Noto Sans SC', sans-serif;
-            
-            /* --- 核心修复：解决移动端高度溢出问题 --- */
-            position: fixed; /* 锁死页面，防止回弹 */
-            top: 0; left: 0;
-            width: 100%;
-            height: 100%;       /* 兼容旧浏览器 */
-            height: 100dvh;     /* 关键：动态视口高度，减去地址栏高度 */
-            
-            display: flex;
-            flex-direction: column;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100dvh;
+            display: flex; flex-direction: column; overflow: hidden;
+            touch-action: none; -webkit-user-select: none; user-select: none;
+        }
+
+        /* 动态网格背景 - 跟随画布移动 */
+        /* 我们把背景移到 world-layer 里面去，让它产生移动感 */
+        
+        .title-bar {
+            height: 44px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 15px; border-bottom: 1px solid var(--accent-blue);
+            flex-shrink: 0; padding-top: env(safe-area-inset-top);
+            z-index: 100;
+        }
+        .title-bar h1 { font-size: 14px; color: #fff; margin: 0; }
+        .mode-badge { font-size: 10px; color: #000; background: var(--accent-cyan); padding: 1px 4px; border-radius: 2px; font-weight: bold; }
+
+        /* 视口容器 */
+        .viewport {
+            flex: 1;
+            position: relative;
             overflow: hidden;
+            width: 100%;
+            cursor: grab;
+            background-color: var(--bg-color);
+        }
+        .viewport:active { cursor: grabbing; }
+
+        /* --- 核心：世界层 (承载所有节点和连线，可被整体拖动) --- */
+        #worldLayer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 0; height: 0; /* 尺寸不重要，内容决定 */
+            transform-origin: 0 0;
+            will-change: transform; /* 性能优化 */
             
-            touch-action: none; 
-            -webkit-user-select: none;
-            user-select: none;
-            
+            /* 背景网格放在这里，随拖动移动 */
             background-image: 
                 linear-gradient(30deg, var(--grid-line) 12%, transparent 12.5%, transparent 87%, var(--grid-line) 87.5%, var(--grid-line)),
                 linear-gradient(150deg, var(--grid-line) 12%, transparent 12.5%, transparent 87%, var(--grid-line) 87.5%, var(--grid-line));
             background-size: 40px 70px;
+            /* 背景需要很大，覆盖移动范围 */
+            width: 10000px; height: 10000px; 
+            transform: translate(-5000px, -5000px); /* 初始居中一点 */
+            z-index: 0;
+            pointer-events: none; /* 让事件穿透到底层 div */
         }
 
-        /* 顶部栏更紧凑 */
-        .title-bar {
-            height: 44px; /* 标准 App 导航栏高度 */
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(8px);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 15px;
-            border-bottom: 1px solid var(--accent-blue);
-            flex-shrink: 0;
-            padding-top: env(safe-area-inset-top); /* 适配刘海 */
+        /* 实际内容容器，需要抵消 worldLayer 的巨大尺寸带来的偏移 */
+        #contentGroup {
+            position: absolute;
+            left: 5000px; top: 5000px; /* 对应上面的偏移 */
+            width: 0; height: 0;
+            overflow: visible;
         }
-        .title-bar h1 { font-size: 14px; color: #fff; margin: 0; }
-        .version-tag { font-size: 10px; color: var(--accent-cyan); border: 1px solid var(--accent-cyan); padding: 0 4px; border-radius: 3px; }
-
-        .main-container {
-            flex: 1; /* 自动占据剩余空间 */
-            position: relative;
-            cursor: grab;
-            overflow: hidden;
-            touch-action: none;
-            width: 100%;
-        }
-        .main-container:active { cursor: grabbing; }
 
         svg {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            top: -5000px; left: -5000px; /* SVG 需要覆盖足够大的区域 */
+            width: 10000px; height: 10000px;
             pointer-events: none;
             z-index: 1;
         }
 
-        .link {
-            fill: none;
-            stroke: var(--accent-cyan);
-            stroke-width: 2;
-            opacity: 0.6;
-        }
+        .link { fill: none; stroke: var(--accent-cyan); stroke-width: 2; opacity: 0.6; }
 
         .node {
             position: absolute;
-            width: 40px; /* 进一步适配小屏 */
-            height: 40px;
+            width: 42px; height: 42px;
             background: radial-gradient(circle at 30% 30%, var(--accent-cyan), var(--accent-blue));
             border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: #fff;
-            font-weight: bold;
-            font-size: 12px;
+            display: flex; justify-content: center; align-items: center;
+            color: #fff; font-weight: bold; font-size: 12px;
             box-shadow: 0 0 10px var(--accent-blue);
             border: 1px solid rgba(255,255,255,0.5);
             z-index: 10;
             touch-action: none; 
             transform: translate(-50%, -50%);
+            pointer-events: auto; /* 恢复节点的可交互性 */
         }
         .node.active {
             background: radial-gradient(circle at 30% 30%, #fff, var(--highlight-gold));
             box-shadow: 0 0 20px var(--highlight-gold);
-            color: #000;
-            transform: translate(-50%, -50%) scale(1.2);
+            color: #000; transform: translate(-50%, -50%) scale(1.2);
         }
 
-        /* 底部面板适配 */
+        /* 底部面板 */
         .control-panel {
             background: var(--panel-bg);
             border-top: 1px solid var(--accent-cyan);
             padding: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            z-index: 50;
-            flex-shrink: 0; /* 防止被挤压 */
-            
-            /* 关键：适配 iPhone 底部小黑条，防止按钮贴底 */
+            display: flex; flex-direction: column; gap: 8px; z-index: 50; flex-shrink: 0;
             padding-bottom: calc(10px + env(safe-area-inset-bottom));
         }
-
-        .status-log {
-            text-align: center;
-            color: var(--accent-blue);
-            font-size: 11px;
-            height: 15px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .controls-row {
-            display: flex;
-            justify-content: space-between; /* 两端对齐，利用屏幕宽度 */
-            align-items: center;
-            gap: 8px;
-        }
-
-        .input-group { 
-            display: flex; 
-            gap: 5px; 
-            flex: 1; /* 占据左侧空间 */
-        }
-
-        input {
-            background: rgba(0,0,0,0.4);
-            border: 1px solid var(--accent-blue);
-            color: var(--accent-cyan);
-            padding: 0 8px;
-            border-radius: 4px;
-            width: 100%; /* 自适应宽度 */
-            height: 32px;
-            font-size: 14px;
-            outline: none;
-            /* 解决 iOS 输入框圆角问题 */
-            -webkit-appearance: none;
-            border-radius: 4px;
-        }
-
-        button {
-            background: rgba(0, 247, 255, 0.1);
-            border: 1px solid var(--accent-cyan);
-            color: var(--accent-cyan);
-            padding: 0 10px;
-            height: 32px; /* 统一高度，方便点击 */
-            border-radius: 4px;
-            font-size: 12px;
-            white-space: nowrap;
-        }
-
-        .btn-group-traverse {
-            display: flex;
-            gap: 4px;
-            justify-content: center;
-            width: 100%;
-        }
-        
-        .btn-group-traverse button {
-            flex: 1; /* 按钮平分宽度，方便手指点击 */
-            padding: 0;
-        }
-
-        /* 特殊按钮颜色 */
+        .status-log { text-align: center; color: var(--accent-blue); font-size: 11px; height: 15px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        .controls-row { display: flex; align-items: center; gap: 8px; }
+        .input-group { display: flex; gap: 5px; flex: 1; }
+        input { background: rgba(0,0,0,0.4); border: 1px solid var(--accent-blue); color: var(--accent-cyan); padding: 0 8px; border-radius: 4px; width: 100%; height: 32px; font-size: 14px; outline: none; -webkit-appearance: none; }
+        button { background: rgba(0, 247, 255, 0.1); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 0 10px; height: 32px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+        .btn-group-traverse { display: flex; gap: 4px; width: 100%; }
+        .btn-group-traverse button { flex: 1; padding: 0; }
         .btn-clear { border-color: #ff4d4d; color: #ff4d4d; }
+        
+        /* 提示层 */
+        .tip-overlay {
+            position: absolute; bottom: 120px; left: 0; width: 100%;
+            text-align: center; pointer-events: none; opacity: 0;
+            transition: opacity 0.5s; z-index: 40;
+        }
+        .tip-text {
+            background: rgba(0,0,0,0.7); color: #fff; padding: 5px 10px;
+            border-radius: 10px; font-size: 12px;
+        }
     </style>
 </head>
 <body>
 
     <div class="title-bar">
-        <h1>二叉树矩阵</h1>
-        <span class="version-tag">MOBILE</span>
+        <h1>无限画布矩阵</h1>
+        <span class="mode-badge">Pan & Zoom</span>
     </div>
 
-    <div class="main-container" id="treeContainer">
-        <svg id="svgLayer"></svg>
-        <div id="nodesLayer"></div>
+    <div class="viewport" id="viewport">
+        <div id="worldLayer">
+            <div id="contentGroup">
+                <svg id="svgLayer"></svg>
+                <div id="nodesLayer"></div>
+            </div>
+        </div>
+        
+        <div class="tip-overlay" id="tipOverlay">
+            <span class="tip-text">拖动空白处移动视角 • 拖动节点改变结构</span>
+        </div>
     </div>
 
     <div class="control-panel">
-        <div class="status-log" id="statusLog">// 系统就绪</div>
+        <div class="status-log" id="statusLog">// 系统就绪。拖动空白处可移动画布。</div>
         
         <div class="controls-row">
             <div class="input-group">
@@ -222,7 +181,11 @@
     </div>
 
     <script>
-        // ... 数据结构 (完全一致) ...
+        // --- 核心状态 ---
+        const viewState = { x: 0, y: 0 }; // 画布偏移量
+        let isAnimating = false;
+
+        // --- 数据结构 ---
         class TreeNode {
             constructor(val, x = 0, y = 0) {
                 this.val = val; this.left = null; this.right = null; this.x = x; this.y = y;
@@ -230,28 +193,28 @@
         }
         class BinarySearchTree {
             constructor() { this.root = null; }
-            insert(val, containerW) {
+            insert(val) {
                 if (!this.root) {
-                    this.root = new TreeNode(val, containerW / 2, 100); // 初始位置下移一点，避免遮挡
+                    this.root = new TreeNode(val, 0, 0); // 根节点永远在世界中心 (0,0)
                     return { success: true, node: this.root };
                 }
                 let current = this.root;
                 let depth = 0;
                 while (true) {
                     if (val === current.val) return { success: false, node: current };
-                    // 移动端间距优化
-                    let offset = (containerW / 2.2) / Math.pow(1.95, depth);
-                    if (offset < 30) offset = 30; 
+                    // 间距计算
+                    let offset = 180 / Math.pow(1.8, depth);
+                    if (offset < 40) offset = 40; 
 
                     if (val < current.val) {
                         if (!current.left) {
-                            current.left = new TreeNode(val, current.x - offset, current.y + 60);
+                            current.left = new TreeNode(val, current.x - offset, current.y + 80);
                             return { success: true, node: current.left };
                         }
                         current = current.left;
                     } else {
                         if (!current.right) {
-                            current.right = new TreeNode(val, current.x + offset, current.y + 60);
+                            current.right = new TreeNode(val, current.x + offset, current.y + 80);
                             return { success: true, node: current.right };
                         }
                         current = current.right;
@@ -261,18 +224,13 @@
             }
         }
 
-        // ... 渲染逻辑 ...
+        // --- 渲染引擎 ---
         const bst = new BinarySearchTree();
-        const container = document.getElementById('treeContainer');
+        const worldLayer = document.getElementById('worldLayer');
         const svgLayer = document.getElementById('svgLayer');
         const nodesLayer = document.getElementById('nodesLayer');
         const statusLog = document.getElementById('statusLog');
         const input = document.getElementById('valInput');
-
-        let isDragging = false;
-        let draggedNodeRoot = null;
-        let dragLastPos = { x: 0, y: 0 };
-        let isAnimating = false;
 
         function log(msg) { statusLog.innerText = `// ${msg}`; }
 
@@ -288,11 +246,14 @@
             div.className = 'node';
             div.id = `node-${node.val}`;
             div.innerText = node.val;
+            // 这里的坐标是相对于世界中心的
             div.style.left = node.x + 'px';
             div.style.top = node.y + 'px';
             
-            div.addEventListener('mousedown', (e) => startDrag(e, node));
-            div.addEventListener('touchstart', (e) => startDrag(e, node), { passive: false });
+            // 节点事件绑定
+            const startHandler = (e) => startInteraction(e, 'NODE', node);
+            div.addEventListener('mousedown', startHandler);
+            div.addEventListener('touchstart', startHandler, { passive: false });
 
             nodesLayer.appendChild(div);
             if (node.left) drawLine(node, node.left);
@@ -317,69 +278,106 @@
             return `M ${parent.x} ${parent.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${child.x} ${child.y}`;
         }
 
-        // ... 触控逻辑 ...
-        function getEventPos(e) {
-            if (e.touches && e.touches.length > 0) {
-                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-            }
-            return { x: e.clientX, y: e.clientY };
-        }
+        // --- 统一交互控制器 (核心) ---
+        // 模式：PAN (拖画布) 或 DRAG_NODE (拖节点)
+        let interactionMode = null; 
+        let draggedTarget = null;
+        let lastPos = { x: 0, y: 0 };
 
-        function startDrag(e, node) {
-            if(isAnimating) return;
-            if (e.type === 'touchstart') e.preventDefault(); 
-            e.stopPropagation();
+        const viewport = document.getElementById('viewport');
 
-            isDragging = true;
-            draggedNodeRoot = node;
-            const pos = getEventPos(e);
-            dragLastPos.x = pos.x;
-            dragLastPos.y = pos.y;
-            
-            container.style.cursor = 'grabbing';
-            document.getElementById(`node-${node.val}`).style.zIndex = 100;
-        }
-
-        function handleMove(e) {
-            if (!isDragging || !draggedNodeRoot) return;
-            if(e.type === 'touchmove') e.preventDefault();
-
-            const pos = getEventPos(e);
-            const dx = pos.x - dragLastPos.x;
-            const dy = pos.y - dragLastPos.y;
-            dragLastPos.x = pos.x;
-            dragLastPos.y = pos.y;
-
-            moveSubtree(draggedNodeRoot, dx, dy);
-            
-            // 实时更新父节点连线
-            const parent = findParent(bst.root, draggedNodeRoot.val);
-            if (parent) {
-                const linkEl = document.getElementById(`link-${parent.val}-${draggedNodeRoot.val}`);
-                if (linkEl) linkEl.setAttribute("d", getPathD(parent, draggedNodeRoot));
-            }
-        }
-
-        function handleEnd() {
-            if(isDragging && draggedNodeRoot) {
-                const el = document.getElementById(`node-${draggedNodeRoot.val}`);
-                if(el) el.style.zIndex = '';
-            }
-            isDragging = false;
-            draggedNodeRoot = null;
-            container.style.cursor = 'grab';
-        }
+        // 绑定视口事件 (处理画布拖动)
+        viewport.addEventListener('mousedown', (e) => startInteraction(e, 'PAN'));
+        viewport.addEventListener('touchstart', (e) => startInteraction(e, 'PAN'), { passive: false });
 
         window.addEventListener('mousemove', handleMove);
         window.addEventListener('touchmove', handleMove, { passive: false });
         window.addEventListener('mouseup', handleEnd);
         window.addEventListener('touchend', handleEnd);
 
-        // ... 递归移动 ...
+        function getEventPos(e) {
+            if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            return { x: e.clientX, y: e.clientY };
+        }
+
+        function startInteraction(e, mode, targetNode = null) {
+            if (isAnimating) return;
+            // 如果是触摸，阻止默认滚动
+            if (e.type === 'touchstart') e.preventDefault(); 
+            e.stopPropagation(); // 防止事件穿透
+
+            interactionMode = mode;
+            draggedTarget = targetNode;
+            const pos = getEventPos(e);
+            lastPos = { x: pos.x, y: pos.y };
+
+            if (mode === 'PAN') {
+                viewport.style.cursor = 'grabbing';
+            } else if (mode === 'NODE') {
+                document.getElementById(`node-${targetNode.val}`).style.zIndex = 100;
+                viewport.style.cursor = 'grabbing';
+            }
+        }
+
+        function handleMove(e) {
+            if (!interactionMode) return;
+            if (e.type === 'touchmove') e.preventDefault();
+
+            const pos = getEventPos(e);
+            const dx = pos.x - lastPos.x;
+            const dy = pos.y - lastPos.y;
+            lastPos = { x: pos.x, y: pos.y };
+
+            if (interactionMode === 'PAN') {
+                // 移动画布
+                viewState.x += dx;
+                viewState.y += dy;
+                updateWorldTransform();
+            } else if (interactionMode === 'NODE') {
+                // 移动节点 (级联)
+                moveSubtree(draggedTarget, dx, dy);
+                updateNodeLink(draggedTarget);
+            }
+        }
+
+        function handleEnd() {
+            if (interactionMode === 'NODE' && draggedTarget) {
+                const el = document.getElementById(`node-${draggedTarget.val}`);
+                if(el) el.style.zIndex = '';
+            }
+            interactionMode = null;
+            draggedTarget = null;
+            viewport.style.cursor = 'grab';
+        }
+
+        function updateWorldTransform() {
+            // 使用 translate3d 开启硬件加速
+            // 这里的 viewState.x/y 是视口中心的偏移
+            worldLayer.style.transform = `translate3d(${viewState.x - 5000}px, ${viewState.y - 5000}px, 0)`;
+        }
+
+        function centerViewOn(x, y) {
+            // 计算让 (x,y) 居中所需的 viewState
+            // 视口中心
+            const vw = viewport.offsetWidth;
+            const vh = viewport.offsetHeight;
+            
+            // 目标：让 world 的 (x,y) 点出现在屏幕 (vw/2, vh/2) 处
+            // 公式：viewState.x = vw/2 - x
+            viewState.x = vw / 2 - x;
+            viewState.y = vh / 2 - y;
+            
+            // 添加平滑过渡效果
+            worldLayer.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)';
+            updateWorldTransform();
+            // 动画结束后移除 transition 以免影响拖拽
+            setTimeout(() => { worldLayer.style.transition = ''; }, 500);
+        }
+
+        // ... 节点移动逻辑 (同前) ...
         function moveSubtree(node, dx, dy) {
             if (!node) return;
-            node.x += dx;
-            node.y += dy;
+            node.x += dx; node.y += dy;
             const el = document.getElementById(`node-${node.val}`);
             if (el) { el.style.left = node.x + 'px'; el.style.top = node.y + 'px'; }
             if (node.left) {
@@ -393,7 +391,13 @@
                 moveSubtree(node.right, dx, dy);
             }
         }
-
+        function updateNodeLink(node) {
+             const parent = findParent(bst.root, node.val);
+            if (parent) {
+                const linkEl = document.getElementById(`link-${parent.val}-${node.val}`);
+                if (linkEl) linkEl.setAttribute("d", getPathD(parent, node));
+            }
+        }
         function findParent(node, val) {
             if (!node) return null;
             if ((node.left && node.left.val === val) || (node.right && node.right.val === val)) return node;
@@ -401,9 +405,15 @@
             return findParent(node.right, val);
         }
 
-        // ... 算法操作 ...
+        // ... 业务逻辑 ...
         const sleep = ms => new Promise(r => setTimeout(r, ms));
         async function visitNode(node) {
+            // 自动追踪视角！
+            if (isAnimating) {
+                // 如果是遍历动画，不要频繁移动视角，否则会晕
+                // 这里可以选择是否开启
+            }
+            
             const el = document.getElementById(`node-${node.val}`);
             if(el) {
                 el.classList.add('active');
@@ -417,14 +427,18 @@
             if (isAnimating) return;
             const val = parseInt(input.value);
             if (isNaN(val)) return;
-            input.blur(); // 移动端关键：插入后收起键盘！
-            
-            const result = bst.insert(val, container.offsetWidth);
+            input.blur();
+
+            const result = bst.insert(val);
             if (result.success) {
                 log(`插入: ${val}`);
-                renderTree(); 
+                renderTree();
+                
+                // 关键优化：自动把视角移动到新节点！
+                centerViewOn(result.node.x, result.node.y);
+                
                 await visitNode(result.node);
-            } else { log(`重复: ${val}`); }
+            } else { log(`重复: ${val}`); centerViewOn(result.node.x, result.node.y); }
             input.value = '';
         }
 
@@ -432,17 +446,27 @@
             if (isAnimating) return;
             const val = parseInt(input.value);
             if (isNaN(val)) return;
-            input.blur(); // 收起键盘
-            
+            input.blur();
             isAnimating = true;
             log(`查找: ${val}`);
             let curr = bst.root;
+            
+            // 搜索开始时，先回到根节点
+            if (curr) centerViewOn(curr.x, curr.y);
+            await sleep(500);
+
             while(curr) {
                 const el = document.getElementById(`node-${curr.val}`);
                 if(el) el.classList.add('active');
+                
+                // 搜索过程中，视角跟随节点移动
+                // centerViewOn(curr.x, curr.y); // 如果觉得太晕可以注释掉这行
+                
                 await sleep(400);
                 if(curr.val === val) {
                     log(`找到: ${val}`);
+                    // 找到后，确保视角居中
+                    centerViewOn(curr.x, curr.y);
                     setTimeout(() => { if(el) el.classList.remove('active'); }, 1000);
                     isAnimating = false;
                     return;
@@ -454,13 +478,25 @@
             isAnimating = false;
         }
 
-        function handleClear() { bst.root = null; renderTree(); log("已清空"); }
+        function handleClear() { 
+            bst.root = null; 
+            renderTree(); 
+            viewState.x = viewport.offsetWidth / 2;
+            viewState.y = viewport.offsetHeight / 2;
+            updateWorldTransform();
+            log("已清空"); 
+        }
 
         async function handleTraverse(type) {
             if (isAnimating || !bst.root) return;
             isAnimating = true;
             const btns = document.querySelectorAll('button');
             btns.forEach(b => b.disabled = true);
+            
+            // 遍历前先把视角复位到根节点
+            centerViewOn(bst.root.x, bst.root.y);
+            await sleep(500);
+
             if (type === 'pre') await preOrder(bst.root);
             else if (type === 'in') await inOrder(bst.root);
             else if (type === 'post') await postOrder(bst.root);
@@ -470,7 +506,7 @@
             log("完成");
         }
 
-        // 简化的遍历逻辑
+        // 遍历函数
         async function preOrder(node) { if(!node) return; await visitNode(node); await preOrder(node.left); await preOrder(node.right); }
         async function inOrder(node) { if(!node) return; await inOrder(node.left); await visitNode(node); await inOrder(node.right); }
         async function postOrder(node) { if(!node) return; await postOrder(node.left); await postOrder(node.right); await visitNode(node); }
@@ -485,10 +521,18 @@
         }
 
         window.addEventListener('load', () => {
-            const w = container.offsetWidth;
-            // 移动端初始只给3个节点，避免太乱
-            [50, 30, 70].forEach(v => bst.insert(v, w));
+            // 初始化居中
+            viewState.x = viewport.offsetWidth / 2;
+            viewState.y = viewport.offsetHeight / 2;
+            updateWorldTransform();
+            
+            // 初始数据
+            [50, 30, 70, 20].forEach(v => bst.insert(v));
             renderTree();
+            
+            // 显示提示
+            setTimeout(() => { document.getElementById('tipOverlay').style.opacity = 1; }, 1000);
+            setTimeout(() => { document.getElementById('tipOverlay').style.opacity = 0; }, 5000);
         });
     </script>
 </body>
